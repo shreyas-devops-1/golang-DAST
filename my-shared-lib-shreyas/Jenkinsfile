@@ -1,0 +1,60 @@
+@Library('shreyas_golang_dast') _
+
+import org.opstree.EmployeeSetup
+import org.opstree.EmployeeScan
+import org.opstree.EmployeeReport
+import org.opstree.EmployeeNotify
+
+node {
+
+    def config = [
+        ZAP   : "http://127.0.0.1:8090",
+        BASE  : "http://54.75.14.188:8080",
+        TARGET: "http://54.75.14.188:8080/swagger/doc.json",
+        KEY   : "1234567890",
+        SLACK : "#ci-operation-notifications"    ]
+
+    def setup  = new EmployeeSetup(this)
+    def scan   = new EmployeeScan(this)
+    def report = new EmployeeReport(this)
+    def notify = new EmployeeNotify(this)
+
+    properties([
+        buildDiscarder(logRotator(numToKeepStr: '5'))
+    ])
+
+    try {
+
+        stage('Setup') {
+            cleanWs()
+            setup.execute(config)
+        }
+
+        stage('Spider + Active Scan') {
+            scan.execute(config)
+        }
+
+        stage('Report') {
+            report.execute(config)
+        }
+
+        currentBuild.result = 'SUCCESS'
+
+        stage('Success Notify') {
+            notify.success(config)
+        }
+
+    } catch (Exception e) {
+
+        currentBuild.result = 'FAILURE'
+
+        stage('Failure Notify') {
+            notify.failure(config, e)
+        }
+
+        throw e
+
+    } finally {
+        echo "Pipeline completed: ${currentBuild.result}"
+    }
+}
